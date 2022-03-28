@@ -78,6 +78,7 @@ event beginAfull(host, host, pkey, pkey, nonce, nonce).
 event endAfull(host, host, pkey, pkey, nonce, nonce).
 
 event debug().
+
 query event(debug).
 
 query x: host, y: host; inj-event(endBparam(x,y)) ==> inj-event(beginBparam(x,y)).

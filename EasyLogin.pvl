@@ -1,0 +1,125 @@
+free c: channel[private].
+
+type host.
+type nonce.
+type pkey.
+type skey.
+type spkey.
+type sskey.
+type certificate.
+
+fun nonce_to_bitstring(nonce): bitstring [data,typeConverter].
+
+(* Public key encryption *)
+
+fun pk(skey): pkey.
+fun encrypt(bitstring, pkey): bitstring.
+reduc forall x: bitstring, y: skey; decrypt(encrypt(x,pk(y)),y) = x.
+fun sign_normal(bitstring, skey): bitstring.
+reduc forall m: bitstring, k: skey; checksign_normal(sign_normal(m,k), pk(k)) = m.
+(* Signatures *)
+
+fun spk(sskey): spkey.
+fun sign(bitstring, sskey): bitstring.
+reduc forall m: bitstring, k: sskey; getmess(sign(m,k)) = m.
+reduc forall m: bitstring, k: sskey; checksign(sign(m,k), spk(k)) = m.
+
+
+(* Shared key encryption *)
+
+fun sencrypt(bitstring,nonce): bitstring.
+reduc forall x: bitstring, y: nonce; sdecrypt(sencrypt(x,y),y) = x.
+
+(* Secrecy assumptions *)
+
+not attacker(new skA).
+not attacker(new skB).
+not attacker(new skS).
+
+(* 2 honest host names A and B *)
+
+free A, B: host.
+
+(* the table host names/keys 
+   The key table consists of pairs (host, public key) *)
+table keys(host, pkey).
+
+free secretANa, secretANb, secretBNa, secretBNb: bitstring [private].
+
+event beginBparam(host, host).
+event endBparam(host, host).
+event beginAparam(host, host).
+event endAparam(host, host).
+event beginBfull(host, host, pkey, pkey, nonce, nonce).
+event endBfull(host, host, pkey, pkey, nonce, nonce).
+event beginAfull(host, host, pkey, pkey, nonce, nonce).
+event endAfull(host, host, pkey, pkey, nonce, nonce).
+
+event debug().
+
+(* Role of the initiator with identity xA and secret key skxA *)
+
+let processApp(pkS: spkey, skA: skey, pkA: pkey, A: host, Ca: bitstring) =
+	(* Message 1: send the public key certificate to other host *)
+	out(c, (A, pkA, Ca));
+
+	in(c, (m:bitstring, xCc:bitstring));
+	let (NX:nonce, hostX:host , pkX:pkey) = decrypt(m, skA) in
+	let (=hostX, =pkX) = checksign(xCc,pkS) in
+	event beginBparam(A, hostX);
+
+        (* Message 3 *)
+	new N2: nonce; 
+        out(c, encrypt((N2, NX, A), pkX));
+
+        in(c, m2:bitstring);
+	if nonce_to_bitstring(N2) = decrypt(m2, skA) then
+	new K:nonce;
+	out(c, encrypt(sign_normal(nonce_to_bitstring(K), skA), pkX));
+	
+	event endAparam(A, hostX);
+	(* event endAfull(A, hostX, pkX, pkA, N2, NX); *)
+	
+	out(c, sencrypt(secretANa, K)).
+	
+	
+
+(* Role of the responder with identity xB and secret key skxB *)
+
+let processResponder(pkS: spkey, skB: skey, pkB: pkey, B: host, Cc: bitstring) =
+        (* receive the public key certificate and check *)
+        in(c, (hostY: host, pkY: pkey, xCa: bitstring) );
+	let (=hostY, =pkY) = checksign(xCa, pkS) in
+	new N1: nonce;
+	
+	(* Message 4: Get the public key certificate for the other host *)
+        out(c, (encrypt((N1, B, pkB), pkY), Cc) );
+	event beginAparam(hostY, B);
+   	in(c, m1: bitstring); 
+        let (NX2: nonce, =N1, =hostY) = decrypt(m1, skB) in
+
+        out(c, encrypt(nonce_to_bitstring(NX2), pkY));
+
+        in(c, m3:bitstring);
+        let nonce_to_bitstring(xK:nonce) = checksign_normal(decrypt(m3, skB), pkY) in
+
+	event endBparam(hostY, B);
+	(* event endBfull(hostY, B, pkB, pkY, NX2, N1); *)
+	event debug();
+	out(c, sencrypt(secretBNa, xK)).
+
+
+(* Server *)
+
+let processS(skS: sskey) =  
+        in(c,(a: host, b: host)); 
+	get keys(=b, sb) in
+        out(c,sign((sb,b),skS)).
+
+(* Key registration *)
+
+let processK =
+        in(c, (h: host, k: pkey));
+        if h <> A && h <> B then insert keys(h,k).
+
+(* Start process *)

@@ -1,0 +1,33 @@
+query event(debug).
+
+(* query x: host, y: host; inj-event(endBparam(x,y)) ==> inj-event(beginBparam(x,y)).
+query x1: host, x2: host, x3: pkey, x4: pkey, x5: nonce, x6: nonce; 
+      	  inj-event(endBfull(x1,x2,x3,x4,x5,x6)) ==> inj-event(beginBfull(x1,x2,x3,x4,x5,x6)).
+query x: host, y: host; inj-event(endAparam(x,y)) ==> inj-event(beginAparam(x,y)).
+query x1: host, x2: host, x3: pkey, x4: pkey, x5: nonce, x6: nonce; 
+      	  inj-event(endAfull(x1,x2,x3,x4,x5,x6)) ==> inj-event(beginAfull(x1,x2,x3,x4,x5,x6)). *)
+
+
+process new skA: skey; 
+	let pkA = pk(skA) in
+        (* out(c, pkA); *)
+	(* insert keys(A, pkA); *)
+        new skB: skey; 
+	let pkB = pk(skB) in
+        (* out(c, pkB); *)
+	(* insert keys(B, pkB); *)
+	new skS: sskey; 
+	let pkS = spk(skS) in
+	let Cc = sign((B, pkB), skS) in    
+	let Ca = sign((A, pkA), skS) in
+	(* out(c, pkS); *)
+	(
+          (* Launch an unbounded number of sessions of the initiator *)
+          (processApp(pkS, skA, pkA, A, Ca)) | 
+          (* Launch an unbounded number of sessions of the responder *)
+          (processResponder(pkS, skB, pkB, B, Cc)) |
+          (* Launch an unbounded number of sessions of the server *)
+          (processS(skS)) |
+          (* Key registration process *)
+	      (!processK)
+    )

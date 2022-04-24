@@ -1,0 +1,156 @@
+(**********************************)
+
+set ignoreTypes = false.
+(*set reconstructTrace = false.
+set traceDisplay = none.
+set verboseClauses = none.
+set explainDerivation = true.
+set reconstructDerivation = false.
+set displayDerivation = false.
+set abbreviateClauses = true.
+set verboseEq = false.
+set verboseTerm = false.*)
+
+(********************************************************************)
+(*                           Messages Type declaration                                        	    *)
+(********************************************************************)
+type msg.
+type ID.
+
+(********************************************************************)
+(*                                  Symmetric encryption     		                         	        *)
+(********************************************************************)
+type key.
+type Senc_alg.
+const WeakSenc:Senc_alg[private].
+
+fun senc(bitstring,key):bitstring.
+reduc forall m: bitstring, k:key; sdec(senc(m,k),k) = m.
+
+fun senc_msg(msg,key):msg.
+reduc forall m: msg, k:key; sdec_msg(senc_msg(m,k),k) = m.
+
+
+
+(********************************************************************)
+(*                                      Signature function                                                *)
+(********************************************************************)
+type spkey.
+type sskey.
+
+fun spk(sskey):spkey.
+fun sign(bitstring, sskey): bitstring.
+reduc forall m: bitstring, ssk: sskey; checksign(sign(m,ssk),spk(ssk)) = m.
+reduc forall m: bitstring, ssk: sskey; getmess(sign(m,ssk)) = m.
+
+(********************************************************************)
+(*                                  ASymmetric encryption     		                         	        *)
+(********************************************************************)
+(* type skey.
+type pkey. *)
+
+(* fun pk(sskey):spkey. *)
+fun aenc(bitstring,spkey):bitstring.
+
+reduc forall m:bitstring, k:sskey; adec(aenc(m,spk(k)),k) = m.
+
+(********************************************************************)
+(*                                           Hash Functions.   					                        *)
+(********************************************************************)
+
+fun hash(bitstring): bitstring.
+
+
+(********************************************************************)
+(*                                   channel declarations                                               *)
+(********************************************************************)
+free c:channel.
+free http:channel.
+free local:channel.
+
+free pwd:bitstring[private].
+
+(********************************************************************)
+(*                                               Event                                                          *)
+(********************************************************************)
+event debug().
+
+(********************************************************************)
+(*              type convertion                                    *)
+(********************************************************************)
+
+fun key2bitstring(key):bitstring[typeConverter].
+
+
+(********************************************************************)
+(*                              Registration message format                                        *)
+(********************************************************************)
+fun AppInfoRes(ID, spkey,sskey,bitstring):msg[data].
+fun AppNfcReq1(ID, spkey,bitstring):msg[data].
+fun AppNfcRes1(bitstring,bitstring):msg[data].
+fun AppNfcReq2(bitstring):msg[data].
+fun AppNfcRes2(bitstring):msg[data].
+fun AppNfcReq3(bitstring):msg[data].
+
+
+
+let server(idA:ID,pkA:spkey,skA:sskey,pkCA:spkey,certificateA:bitstring) =
+(
+	in(http,=idA);
+	out(http,AppInfoRes(idA,pkA,skA,certificateA))
+	(* in(http,secretpwd:bitstring); *)
+).
+
+let app(idA:ID,idC:ID,pkCA:spkey) = 
+(
+	out(http,idA);
+	
+	in(http,AppInfoRes(=idA,pkA,skA,certificateA));
+	
+	out(local,AppNfcReq1(idA,pkA,certificateA));
+	in(local,AppNfcRes1(x:bitstring,certificateC:bitstring));
+	
+	let (n1:bitstring,idc:ID,pkC:spkey) = adec(x,skA) in
+	
+	let (=idC,=pkC) = checksign(certificateC,pkCA) in
+	
+	new n2:bitstring;
+	
+	out(local,AppNfcReq2(aenc((n2,n1,idA),pkC)));
+	
+	in(local,AppNfcRes2(x2:bitstring));
+	let (=n2) = adec(x2,skA) in
+	
+	new sessionKey:key;
+	out(local, AppNfcReq3(aenc(sign(key2bitstring(sessionKey),skA),pkC)));
+	out(local,senc((idA,pwd),sessionKey));
+	in(local,secretpwd:bitstring);
+	
+	(* out(http,sdec(secretpwd,sessionKey)); *)
+	!(
+		out(local,senc((idA,secretpwd),sessionKey));
+		in(local,tmp:bitstring);
+		let (=idA,=pwd) = sdec(tmp,sessionKey) in
+			event debug()
+	)
+).
+
+let nfc(idC:ID,pkC:spkey,skC:sskey,pkA:spkey,pkCA:spkey,certificateC:bitstring,kC:key) = 
+(
+	in(local,AppNfcReq1(idA,pkA,certificateA));
+	let (=idA,=pkA) = checksign(certificateA,pkCA) in
+	new n1:bitstring;
+	out(local,AppNfcRes1(aenc((n1,idC,pkC),pkA),certificateC));
+	in(local,AppNfcReq2(y));
+	let (n2:bitstring,=n1,=idA) = adec(y,skC) in
+	out(local,AppNfcRes2(aenc(n2,pkA)));
+	in(local,AppNfcReq3(y2:bitstring));
+	let key2bitstring(sessionKey) = checksign(adec(y2,skC),pkA) in
+	in(local,y3:bitstring);
+	out(local,senc(senc(sdec(y3,sessionKey),kC),sessionKey));
+	
+	!(
+		in(local,y4:bitstring);
+		out(local,senc(sdec(sdec(y4,sessionKey),kC),sessionKey))
+	)
+).

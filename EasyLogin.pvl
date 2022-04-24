@@ -57,6 +57,22 @@ event endAfull(host, host, pkey, pkey, nonce, nonce).
 
 event debug().
 
+
+let server(idA:host,pkA:spkey,cA:certificate) =
+(
+
+)
+
+let app() =
+(
+
+)
+
+let nfc(idc:host,) =
+(
+
+)
+
 (* Role of the initiator with identity xA and secret key skxA *)
 
 let processApp(pkS: spkey, skA: skey, pkA: pkey, A: host, Ca: bitstring) =

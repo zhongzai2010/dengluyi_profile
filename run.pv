@@ -1,0 +1,15 @@
+(* query event(debug). *)
+query attacker(pwd).
+process
+    new idA:ID; new idC:ID;
+    new skA:sskey; let pkA = spk(skA) in
+    new skC:sskey; let pkC = spk(skC) in
+    new skCA:sskey; let pkCA = spk(skCA) in
+    new kC:key;
+    let certificateA = sign((idA,pkA),skCA) in
+    let certificateC = sign((idC, pkC),skCA) in
+    (
+        server(idA,pkA,skA,pkCA,certificateA)|
+        app(idA,idC,pkCA)|
+        nfc(idC,pkC,skC,pkA,pkCA,certificateC,kC)
+    )

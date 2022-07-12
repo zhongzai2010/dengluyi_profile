@@ -65,7 +65,7 @@ fun hash(bitstring): bitstring.
 (*                                   channel declarations                                               *)
 (********************************************************************)
 free c:channel.
-free http:channel.
+free http:channel[private].
 free local:channel.
 
 free pwd:bitstring[private].
@@ -74,6 +74,13 @@ free pwd:bitstring[private].
 (*                                               Event                                                          *)
 (********************************************************************)
 event debug().
+
+event beginBparam(ID, ID).
+event endBparam(ID, ID).
+event beginAparam(ID, ID).
+event endAparam(ID, ID).
+query x: ID, y: ID; inj-event(endBparam(x,y)) ==> inj-event(beginBparam(x,y)).
+query x: ID, y: ID; inj-event(endAparam(x,y)) ==> inj-event(beginAparam(x,y)).
 
 (********************************************************************)
 (*              type convertion                                    *)
@@ -106,14 +113,14 @@ let app(idA:ID,idC:ID,pkCA:spkey) =
 	out(http,idA);
 	
 	in(http,AppInfoRes(=idA,pkA,skA,certificateA));
-	
+
 	out(local,AppNfcReq1(idA,pkA,certificateA));
 	in(local,AppNfcRes1(x:bitstring,certificateC:bitstring));
-	
+
 	let (n1:bitstring,idc:ID,pkC:spkey) = adec(x,skA) in
 	
 	let (=idC,=pkC) = checksign(certificateC,pkCA) in
-	
+	event beginBparam(idA, idc);
 	new n2:bitstring;
 	
 	out(local,AppNfcReq2(aenc((n2,n1,idA),pkC)));
@@ -126,6 +133,8 @@ let app(idA:ID,idC:ID,pkCA:spkey) =
 	out(local,senc((idA,pwd),sessionKey));
 	in(local,secretpwd:bitstring);
 	
+	event endAparam(idc, idA);
+
 	(* out(http,sdec(secretpwd,sessionKey)); *)
 	!(
 		out(local,senc((idA,secretpwd),sessionKey));
@@ -138,7 +147,9 @@ let app(idA:ID,idC:ID,pkCA:spkey) =
 let nfc(idC:ID,pkC:spkey,skC:sskey,pkA:spkey,pkCA:spkey,certificateC:bitstring,kC:key) = 
 (
 	in(local,AppNfcReq1(idA,pkA,certificateA));
+
 	let (=idA,=pkA) = checksign(certificateA,pkCA) in
+	event beginAparam(idC, idA);
 	new n1:bitstring;
 	out(local,AppNfcRes1(aenc((n1,idC,pkC),pkA),certificateC));
 	in(local,AppNfcReq2(y));
@@ -149,6 +160,7 @@ let nfc(idC:ID,pkC:spkey,skC:sskey,pkA:spkey,pkCA:spkey,certificateC:bitstring,k
 	in(local,y3:bitstring);
 	out(local,senc(senc(sdec(y3,sessionKey),kC),sessionKey));
 	
+	event endBparam(idA, idC);
 	!(
 		in(local,y4:bitstring);
 		out(local,senc(sdec(sdec(y4,sessionKey),kC),sessionKey))
